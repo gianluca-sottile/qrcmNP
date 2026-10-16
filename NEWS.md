@@ -47,6 +47,7 @@
   gains `type = "PDF"` and accepts data frames as `newdata`; `summary()` reports the
   information criteria of Bottai and Cilluffo (2020).
 * New `gof.niqr()` (AIC, BIC and their log versions, for one or more models).
+* `test.fit()`: the Kolmogorov-Smirnov statistic is now two-sided.
 * `testfit.niqr()` is deprecated in favour of the `test.fit()` method; failed
   bootstrap replications no longer stop the procedure.
 
@@ -57,7 +58,9 @@
   attribution) are now part of 'qrcmNP'. Jacobians are computed with a single
   cross-product of Khatri-Rao matrices.
 * 'qrcm' and 'survival' moved from `Depends` to `Imports`; `slp()`, `plf()` and
-  `test.fit()` are re-exported from 'qrcm'.
+  `test.fit()` are re-exported from 'qrcm'. Note that `library(qrcmNP)` no longer
+  attaches 'qrcm' and 'survival': scripts calling, e.g., `iqr()` or `Surv()` need
+  `library(qrcm)` / `library(survival)` (or `qrcm::iqr()`, `survival::Surv()`).
 * Documentation written with roxygen2; new vignette, tests (testthat) and NEWS.
 
 # qrcmNP 0.2.2

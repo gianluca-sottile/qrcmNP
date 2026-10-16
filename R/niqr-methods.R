@@ -22,8 +22,10 @@ niqr_newdata <- function(object, newdata, response = FALSE) {
   }
   mt <- object$terms
   if (!response) mt <- delete.response(mt)
-  mf <- model.frame(mt, data = as.data.frame(newdata), xlev = object$xlevels)
-  list(X = model.matrix(mt, mf), y = if (response) model.response(mf, "numeric") else NULL)
+  mf <- model.frame(mt, data = as.data.frame(newdata), xlev = object$xlevels, na.action = stats::na.exclude)
+  list(X = model.matrix(mt, mf, contrasts.arg = object$contrasts),
+       y = if (response) model.response(mf, "numeric") else NULL,
+       na.action = attr(mf, "na.action"), nrow = nrow(as.data.frame(newdata)))
 }
 
 #' Numerical Jacobian of a vector function of theta.
@@ -94,7 +96,7 @@ summary.niqr <- function(object, p, ...) {
     b <- predict.niqr(object, type = "beta", p = p, se = TRUE)
     out <- lapply(seq_along(p), function(i) {
       est <- vapply(b, function(bb) bb$beta[i], numeric(1))
-      se <- vapply(b, function(bb) bb$se[i], numeric(1))
+      se <- vapply(b, function(bb) if (is.null(bb$se)) NA_real_ else bb$se[i], numeric(1))
       z <- est / se
       cbind(Estimate = est, `Std. Error` = se, `z value` = z, `Pr(>|z|)` = 2 * pnorm(-abs(z)))
     })
@@ -185,10 +187,18 @@ predict.niqr <- function(object, type = c("beta", "CDF", "PDF", "QF", "sim"), ne
   nd <- niqr_newdata(object, if (missing(newdata)) NULL else newdata, response = type %in% c("CDF", "PDF"))
   M <- niqr_M(object, nd$X, if (is.null(nd$y)) rep(0, nrow(nd$X)) else nd$y)
 
+  pad <- function(v) {
+    na <- nd$na.action
+    if (is.null(na)) return(v)
+    out <- if (is.matrix(v) || is.data.frame(v)) {
+      o <- matrix(NA_real_, nd$nrow, ncol(v)); o[-na, ] <- as.matrix(v); o
+    } else { o <- rep(NA_real_, nd$nrow); o[-na] <- v; o }
+    out
+  }
   if (type %in% c("CDF", "PDF")) {
     if (missing(newdata)) return(if (type == "CDF") object$CDF else object$PDF)
     ev <- niqr_eval(theta, M, hessian = TRUE)
-    return(if (type == "CDF") c(ev$ps) else ev$pdf)
+    return(pad(if (type == "CDF") c(ev$ps) else ev$pdf))
   }
   if (type == "QF") {
     if (missing(p)) stop("please indicate the value(s) of 'p'", call. = FALSE)
@@ -199,12 +209,12 @@ predict.niqr <- function(object, type = c("beta", "CDF", "PDF", "QF", "sim"), ne
       fit[, j] <- qd$Q
       if (se) sef[, j] <- sqrt(pmax(rowSums((qd$D %*% V) * qd$D), 0))
     }
-    fit <- as.data.frame(fit); colnames(fit) <- paste0("p", p)
-    if (se) { sef <- as.data.frame(sef); colnames(sef) <- colnames(fit); return(list(fit = fit, se.fit = sef)) }
+    fit <- as.data.frame(pad(fit)); colnames(fit) <- paste0("p", p)
+    if (se) { sef <- as.data.frame(pad(sef)); colnames(sef) <- colnames(fit); return(list(fit = fit, se.fit = sef)) }
     return(fit)
   }
   # sim
-  niqr_qd(theta, runif(nrow(nd$X)), M)$Q
+  pad(niqr_qd(theta, runif(nrow(nd$X)), M)$Q)
 }
 
 #' Plot a Nonlinear Parametric Quantile Model
@@ -326,7 +336,7 @@ test.fit.niqr <- function(object, R = 100, trace = FALSE, ...) {
     n <- length(Fy)
     Fy <- sort(Fy)
     hat <- seq_len(n) / n
-    ks <- max(abs(Fy - hat))
+    ks <- max(hat - Fy, Fy - (seq_len(n) - 1) / n)
     Fy2 <- c(0, Fy, 1); hat2 <- c(0, hat, 1)
     U <- (hat2 - Fy2)^2
     h <- diff(Fy2)
@@ -346,7 +356,7 @@ test.fit.niqr <- function(object, R = 100, trace = FALSE, ...) {
     yb <- niqr_qd(object$coefficients, runif(n), Mb)$Q
     f <- tryCatch(suppressWarnings(niqr_fit(object$coefficients, yb, Xb, object$weights[id], object$fun,
                                             object$fun2, ctrl, boot = TRUE)), error = function(e) NULL)
-    if (!is.null(f)) Tb[b, ] <- unif_stat(f$CDF)
+    if (!is.null(f) && f$converged) Tb[b, ] <- unif_stat(f$CDF)
   }
   ok <- stats::complete.cases(Tb)
   if (sum(!ok) > 0) warning(sprintf("%d bootstrap replications failed", sum(!ok)), call. = FALSE)

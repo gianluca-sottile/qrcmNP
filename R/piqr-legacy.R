@@ -138,8 +138,8 @@ legacy_fit <- function(A, s, tol, maxit, segno = 1, lambda = 0) {
   obj <- loss_internal(fit$coefficients, V, bfun, type, fit$ps) * (S$y$M - S$y$m) / 10
   covar <- cov_theta(fit$coefficients, V, bfun, fit$ps, type, s)
   out <- check_out(fit$coefficients, S, covar = covar$Q)
-  list(theta = out$theta, covar = out$covar, obj = obj, grad = fit$grad,
-       converged = fit$converged)
+  list(theta = out$theta, theta.int = fit$coefficients, covar = out$covar, obj = obj,
+       grad = fit$grad, converged = fit$converged)
 }
 
 #' Port of the path algorithm of piqr() in qrcmNP 0.2.2.
@@ -149,7 +149,7 @@ legacy_path_core <- function(A, nlambda, lambda.min.ratio, lambda, tol, maxit, v
   intercept <- A$stats.X$intercept
   cX <- A$stats.X$const
   V <- A$V; bfun <- A$internal.bfun; type <- A$type
-  thetas <- covars <- list(); obj <- dl <- conv <- NULL
+  thetas <- thetas.int <- covars <- list(); obj <- dl <- conv <- NULL
 
   if (!intercept) {
     th0 <- matrix(0, q, k)
@@ -160,7 +160,7 @@ legacy_path_core <- function(A, nlambda, lambda.min.ratio, lambda, tol, maxit, v
     s_int <- s[cX, ]
     s1 <- matrix(0, q, k); s1[cX, ] <- s_int
     f <- legacy_fit(A, s1, tol, maxit)
-    thetas[[1]] <- f$theta; covars[[1]] <- f$covar; obj <- f$obj; conv <- f$converged
+    thetas[[1]] <- f$theta; thetas.int[[1]] <- f$theta.int; covars[[1]] <- f$covar; obj <- f$obj; conv <- f$converged
     grad <- f$grad
   }
   grad[c(s) == 0] <- 0
@@ -180,13 +180,13 @@ legacy_path_core <- function(A, nlambda, lambda.min.ratio, lambda, tol, maxit, v
   for (i in il) AA[i, s[i, ] == 1] <- TRUE
   if (intercept) AA[cX, ] <- (s_int == 1)
 
-  if (nlambda == 1 || !intercept) { thetas <- covars <- list(); obj <- conv <- NULL; dl <- NULL }
+  if (nlambda == 1 || !intercept) { thetas <- thetas.int <- covars <- list(); obj <- conv <- NULL; dl <- NULL }
   np <- if (nlambda == 1 || !intercept) 0 else 1
   flag <- TRUE
   for (kk in 1:10000) {
     if (flag) { np <- np + 1; if (np > nlambda) { np <- np - 1; break } }
     else {
-      thetas <- thetas[-np]; covars <- covars[-np]; obj <- obj[-np]; conv <- conv[-np]; dl <- dl[, -np, drop = FALSE]
+      thetas <- thetas[-np]; thetas.int <- thetas.int[-np]; covars <- covars[-np]; obj <- obj[-np]; conv <- conv[-np]; dl <- dl[, -np, drop = FALSE]
     }
     flag <- TRUE
     al <- l[np]
@@ -195,7 +195,7 @@ legacy_path_core <- function(A, nlambda, lambda.min.ratio, lambda, tol, maxit, v
     if (intercept) tempSegno[cX, ] <- 0
     f <- try(legacy_fit(A, s.np, tol, maxit, segno = tempSegno, lambda = al * percent), silent = TRUE)
     if (inherits(f, "try-error")) { np <- np - 1; break }
-    thetas[[np]] <- f$theta; covars[[np]] <- f$covar; obj[np] <- f$obj; conv[np] <- f$converged
+    thetas[[np]] <- f$theta; thetas.int[[np]] <- f$theta.int; covars[[np]] <- f$covar; obj[np] <- f$obj; conv[np] <- f$converged
     grad <- f$grad; grad[c(s) == 0] <- 0
     dl <- cbind(dl, grad)
     GRAD <- matrix(grad, q, k)
@@ -218,7 +218,7 @@ legacy_path_core <- function(A, nlambda, lambda.min.ratio, lambda, tol, maxit, v
     if (nlambda == 1 && flag) break
   }
   dl <- apply(dl, 2, function(x) rowSums(abs(matrix(x, q, k))))
-  list(lambda = l[seq_len(np)], theta = thetas, covar = covars, obj.function = obj,
+  list(lambda = l[seq_len(np)], theta = thetas, theta.int = thetas.int, covar = covars, obj.function = obj,
        dl = matrix(dl, nrow = q), converged = conv)
 }
 

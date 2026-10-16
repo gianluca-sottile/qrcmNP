@@ -29,6 +29,7 @@ iqr_ee <- function(theta, y, z, d, X, Xw, bfun, p.star.y, p.star.z, J = TRUE, G,
     A1 <- 1 / c(.rowSums(tcrossprod(X, t(theta)) * b1, n, k))
     A1 <- pmax0(A1)
     A1[attr(p.star.y, "out")] <- 0
+    A1[!is.finite(A1)] <- 0
     J <- crossprod(kr(Xw, b) * A1, kr(X, b))
   }
   list(g = g, J = J, B = B)
@@ -58,6 +59,7 @@ ciqr_ee <- function(theta, y, z, d, X, Xw, bfun, p.star.y, p.star.z, J = TRUE, G
     A1 <- 1 / c(.rowSums(tcrossprod(X, t(theta)) * b1, n, k))
     A1 <- pmax0(A1)
     A1[attr(p.star.y, "out")] <- 0
+    A1[!is.finite(A1)] <- 0
     a <- 1 - py
     a[attr(p.star.y, "out.r")] <- 1 # arbitrary, cancelled by the zeroes in A1
     A2 <- d * b + (1 - d) / (a^2) * (BB1 - B * a - BB)
@@ -101,6 +103,7 @@ ctiqr_ee <- function(theta, y, z, d, X, Xw, bfun, p.star.y, p.star.z, J = TRUE, 
     A1.z <- pmax0(1 / c(.rowSums(Xtheta * b1.z, n, k)))
     A1.y[attr(p.star.y, "out")] <- 0
     A1.z[attr(p.star.z, "out")] <- 0
+    A1.y[!is.finite(A1.y)] <- 0; A1.z[!is.finite(A1.z)] <- 0
     ay <- 1 - py; az <- 1 - pz
     ay[attr(p.star.y, "out.r")] <- az[attr(p.star.z, "out.r")] <- 1
     A2.y <- d * b.y - (1 - d) / (ay^2) * (B.y * ay + BB.y - BB1)

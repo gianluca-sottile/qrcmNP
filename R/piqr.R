@@ -35,7 +35,9 @@
 #'   or `"group"`, the group lasso penalty
 #'   \eqn{\lambda\sum_j w_j\sqrt{k_j}\,\|\theta_{j\cdot}\|_2} that selects
 #'   covariates (all the coefficients \eqn{\theta_{j1},\dots,\theta_{jk}} of the
-#'   \eqn{j}-th covariate are either zero or nonzero). Ignored if
+#'   \eqn{j}-th covariate are either zero or nonzero). Groups are the columns of
+#'   the model matrix (each dummy variable of a factor is a separate group), and
+#'   \eqn{k_j} is the number of free coefficients of column \eqn{j}. Ignored if
 #'   `method = "legacy"`.
 #' @param penalty.factor optional vector of non-negative penalty weights
 #'   \eqn{w_j}, one for each column of the model matrix except the intercept
@@ -72,7 +74,10 @@
 #' are zero, and uses warm starts, sequential strong rules and a final check of
 #' the Karush-Kuhn-Tucker conditions. With censored or truncated data, the
 #' estimating equations of Frumento and Bottai (2017) replace the gradient of the
-#' loss.
+#' loss; since they are not the gradient of a loss function, the symmetric part
+#' of their Jacobian is used in the quadratic approximation, and the iterate with
+#' the smallest violation of the KKT conditions is returned (convergence is
+#' declared when the average violation is below `5e-4`).
 #'
 #' The intercept (the first row of \eqn{\theta}) is never penalized. Use
 #' [gof.piqr()] to select \eqn{\lambda} by AIC or BIC, [cv_piqr()] for
@@ -200,12 +205,15 @@ piqr <- function(formula, formula.p = ~ slp(p, 3), weights, data, s, nlambda = 1
   attr(mf, "all.vars") <- A$V
   attr(mf, "bfun") <- A$bfun
   attr(mf, "type") <- A$type
+  attr(mf, "contrasts") <- attr(A$U$X, "contrasts")
 
   nl <- length(fit$lambda)
   labs <- paste0("lambda", seq_len(nl))
   cn <- list(S$X$coef.names, S$B$coef.names)
   coefficients <- lapply(fit$theta, function(th) { dimnames(th) <- cn; th })
-  seqS <- lapply(coefficients, function(th) { s0 <- 1 * (th != 0); s0 })
+  # selected coefficients: nonzero on the internal (standardised) scale, where the
+  # penalty acts (the back-transformation can fill the constant column of b(p))
+  seqS <- lapply(fit$theta.int, function(th) { s0 <- 1 * (th != 0); dimnames(s0) <- cn; s0 })
   names(coefficients) <- names(seqS) <- labs
   if (!is.null(fit$covar)) names(fit$covar) <- labs
   dl <- fit$dl; dimnames(dl) <- list(S$X$coef.names, labs)
@@ -276,6 +284,14 @@ piqr_path <- function(A, penalty, pf, nlambda, lambda.min.ratio, lambda, tol, ma
     g <- ee(theta, V$y, V$z, V$d, V$X, V$Xw, bfun, ps$y, ps$z, J = FALSE)$g
     nf <- list(theta = theta, ps = ps, g = g, converged = TRUE)
   }
+  # metric used when J = 0 (theta = 0 without unpenalized coefficients)
+  H0 <- NULL
+  if (!any(unpen)) {
+    th0 <- start_theta(V, bfun, 1 * free, type)
+    ps0 <- pstar(th0, V, bfun, type)
+    J0 <- ee(th0, V$y, V$z, V$d, V$X, V$Xw, bfun, ps0$y, ps0$z, J = TRUE)$J
+    H0 <- (J0 + t(J0)) / 2
+  }
 
   crit <- function(g) {
     # dual norm of the gradient, for each element (lasso) or row (group)
@@ -292,11 +308,15 @@ piqr_path <- function(A, penalty, pf, nlambda, lambda.min.ratio, lambda, tol, ma
   }
   nl <- length(lambda)
 
-  thetas <- vector("list", nl)
+  thetas <- thetas.int <- vector("list", nl)
+  set_active <- function(theta) {
+    if (penalty == "group") unpen | (matrix(rowSums(theta != 0) > 0, q, k) & free)
+    else unpen | (theta != 0 & free)
+  }
   obj <- numeric(nl); conv <- logical(nl)
   dl <- matrix(0, q, nl)
   lprev <- lmax
-  active <- unpen | (theta != 0 & free)
+  active <- set_active(theta)
 
   for (t in seq_len(nl)) {
     lam <- lambda[t]
@@ -308,7 +328,7 @@ piqr_path <- function(A, penalty, pf, nlambda, lambda.min.ratio, lambda, tol, ma
     repeat {
       if (t == 1 && !user.lambda) { fit <- nf; break }
       fit <- solver(theta, V, bfun, type, lambda = lam, pen = pen, active = act,
-                    tol = tol, maxit = maxit)
+                    tol = tol, maxit = maxit, H0 = H0)
       theta <- fit$theta; g <- fit$g
       # KKT check on the excluded coefficients
       cr <- crit(g)
@@ -317,8 +337,9 @@ piqr_path <- function(A, penalty, pf, nlambda, lambda.min.ratio, lambda, tol, ma
       if (!any(viol)) break
       act <- act | viol
     }
-    active <- unpen | (theta != 0 & free)
+    active <- set_active(theta)
     lprev <- lam
+    thetas.int[[t]] <- theta
     thetas[[t]] <- check_out(theta, S)$theta
     obj[t] <- loss_internal(theta, V, bfun, type, fit$ps) * (S$y$M - S$y$m) / 10
     conv[t] <- fit$converged
@@ -330,5 +351,6 @@ piqr_path <- function(A, penalty, pf, nlambda, lambda.min.ratio, lambda, tol, ma
   }
   if (!all(conv)) warning(sprintf("the algorithm did not converge for %d value(s) of lambda", sum(!conv)),
                           call. = FALSE)
-  list(lambda = lambda, theta = thetas, covar = NULL, obj.function = obj, dl = dl, converged = conv)
+  list(lambda = lambda, theta = thetas, theta.int = thetas.int, covar = NULL, obj.function = obj,
+       dl = dl, converged = conv)
 }

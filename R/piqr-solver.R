@@ -213,7 +213,7 @@ spd_metric <- function(J, ridge = 1e-4) {
 #' (logical q x k). Returns list(theta, ps, g, converged, n.it).
 #' @noRd
 pnewton <- function(theta, V, bfun, type, lambda, pen, active, tol = 1e-6, maxit = 100,
-                    cd.tol = 1e-9) {
+                    cd.tol = 1e-9, H0 = NULL) {
   ee <- get_ee(type)
   idx <- which(c(active))
   theta[!active] <- 0
@@ -240,7 +240,11 @@ pnewton <- function(theta, V, bfun, type, lambda, pen, active, tol = 1e-6, maxit
   }
   for (it in seq_len(maxit)) {
     g <- G$g
-    H <- spd_metric(G$J[idx, idx, drop = FALSE])
+    Jx <- G$J[idx, idx, drop = FALSE]
+    # at theta = 0 (models without unpenalized coefficients) all the p* are at the
+    # extremes of the grid and J = 0: use the metric H0 instead
+    if (!is.null(H0) && max(abs(Jx)) < 1e-8) Jx <- H0[idx, idx, drop = FALSE]
+    H <- spd_metric(Jx)
     z <- cd_quadratic(g[idx], H, theta[idx], lambda, pen$type, W = cdW, groups = cdG, gw = cdgw,
                       tol = cd.tol)
     delta <- z - theta[idx]

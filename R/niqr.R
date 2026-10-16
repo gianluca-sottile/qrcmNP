@@ -23,11 +23,12 @@
 #'   label the estimates.
 #' @param X,y deprecated matrix interface of 'qrcmNP' 0.2.x: a model matrix
 #'   (with the intercept) and a response vector, used when `formula` is missing.
-#' @param weights optional non-negative weights (a vector, or the name of a
-#'   variable in `data`).
-#' @param cluster an optional vector (or the name of a variable in `data`)
-#'   identifying clusters of correlated observations. It is used to compute
-#'   cluster-robust standard errors (sandwich) or a cluster bootstrap.
+#' @param weights optional non-negative weights: a vector, or a variable in
+#'   `data` given without quotes. They are normalized to have mean 1 and are
+#'   treated as sampling (inverse-probability) weights in the sandwich formula.
+#' @param cluster an optional vector, or a variable in `data` given without
+#'   quotes, identifying clusters of correlated observations. It is used to
+#'   compute cluster-robust standard errors (sandwich) or a cluster bootstrap.
 #' @param control a list of control parameters, see [niqr.control()]. For
 #'   compatibility, the names used in 'qrcmNP' 0.2.x (`tol`, `maxit`,
 #'   `display`, `cluster`, `n_p`, `low_p`, `up_p`) are also accepted.
@@ -152,7 +153,7 @@ niqr <- function(formula, data, fun, fun2 = NULL, x0, X, y, weights, cluster,
     if (is.null(colnames(X))) colnames(X) <- c("(Intercept)", if (ncol(X) > 1) paste0("X", seq_len(ncol(X) - 1)))
     w <- if (missing(weights)) rep.int(1, length(y)) else weights
     clus <- if (missing(cluster)) control$cluster else cluster
-    mt <- NULL; xlev <- NULL
+    mt <- NULL; xlev <- NULL; contr <- NULL
   } else {
     mf <- match.call(expand.dots = FALSE)
     m <- match(c("formula", "data", "weights", "cluster"), names(mf), 0L)
@@ -165,6 +166,7 @@ niqr <- function(formula, data, fun, fun2 = NULL, x0, X, y, weights, cluster,
     if (is.null(y) || is.matrix(y)) stop("the response must be a numeric vector", call. = FALSE)
     X <- model.matrix(mt, mf)
     xlev <- .getXlevels(mt, mf)
+    contr <- attr(X, "contrasts")
     w <- model.weights(mf); if (is.null(w)) w <- rep.int(1, length(y))
     clus <- mf[["(cluster)"]]
     if (is.null(clus)) clus <- control$cluster
@@ -176,6 +178,7 @@ niqr <- function(formula, data, fun, fun2 = NULL, x0, X, y, weights, cluster,
   fit$call <- cl
   fit$terms <- mt
   fit$xlevels <- xlev
+  fit$contrasts <- contr
   fit
 }
 
@@ -235,6 +238,7 @@ niqr_fit <- function(x0, y, X, w, fun, fun2, control, cluster = NULL, boot = FAL
   M <- list(X = X, y = y, weights = w, fun = fun, fun2 = fun2, h = control$h,
             grid = niqr_grid(control$n.p, control$eps), n.bisec = 30)
   b0 <- fun(theta, c(0.25, 0.5))
+  if (!is.matrix(b0) && length(b0) == 2) b0 <- matrix(b0, nrow = 2)
   if (!is.matrix(b0) || nrow(b0) != 2) stop("'fun(theta, p)' must return a matrix with one row for each value of 'p'", call. = FALSE)
   if (is.null(fun2) && ncol(b0) != ncol(X))
     stop(sprintf("'fun(theta, p)' returns %d columns, but the model matrix has %d columns", ncol(b0), ncol(X)), call. = FALSE)
@@ -253,6 +257,9 @@ niqr_fit <- function(x0, y, X, w, fun, fun2, control, cluster = NULL, boot = FAL
     list(ok = is.finite(Lnew) && Lnew <= ev$loss + 1e-4 * t * sum(step * g), L = Lnew)
   }
   for (it in seq_len(control$maxit)) {
+    # stop when the predicted decrease of a Newton step is negligible (at this
+    # point the numerical error of the integrals dominates)
+    if (newton_decrement(ev) < 1e-9 * (1 + abs(ev$loss))) { conv <- TRUE; it <- it - 1; break }
     H <- ev$H
     g <- ev$grad
     dH <- pmax(diag(H), 1e-12 * max(1, max(abs(diag(H)))))
@@ -265,8 +272,10 @@ niqr_fit <- function(x0, y, X, w, fun, fun2, control, cluster = NULL, boot = FAL
       }
       mu <- mu * 10
     }
+    fallback <- !accepted
     if (!accepted) {
       # last resort: steepest descent with backtracking
+      mu <- 1e-3
       step <- -g / max(dH)
       tstep <- 1
       for (ls in 1:50) {
@@ -275,14 +284,17 @@ niqr_fit <- function(x0, y, X, w, fun, fun2, control, cluster = NULL, boot = FAL
         tstep <- tstep / 2
       }
     }
-    if (!accepted) { conv <- max(abs(ev$grad)) < sqrt(control$tol); break }
+    if (!accepted) { conv <- newton_decrement(ev) < 1e-6 * (1 + abs(ev$loss)); break }
+    damped <- fallback || mu > 1
     mu <- max(mu / 10, 1e-10)
     change <- max(abs(tstep * step) / pmax(1, abs(theta)))
     theta <- theta + tstep * step
     ev <- niqr_eval(theta, M)
     if (control$verbose) message(sprintf("iter %3d   loss = %.10f   max|grad| = %.3e", it, ev$loss, max(abs(ev$grad))))
-    if (change < control$tol) { conv <- TRUE; break }
+    # small steps are a sign of convergence only if they are (nearly) Newton steps
+    if (change < control$tol && !damped) { conv <- TRUE; break }
   }
+  if (conv) conv <- newton_decrement(ev) < 1e-6 * (1 + abs(ev$loss))
   if (!conv && !boot) warning("the algorithm did not converge", call. = FALSE)
 
   n <- length(y); d <- length(theta)
@@ -290,6 +302,7 @@ niqr_fit <- function(x0, y, X, w, fun, fun2, control, cluster = NULL, boot = FAL
   omega <- if (is.null(cluster)) crossprod(Si) / n else {
     Sc <- rowsum(Si, cluster)
     G <- nrow(Sc)
+    if (G < 2) stop("at least two clusters are needed", call. = FALSE)
     crossprod(Sc) / n * G / (G - 1)
   }
   covar <- matrix(NA_real_, d, d)
@@ -318,6 +331,14 @@ niqr_fit <- function(x0, y, X, w, fun, fun2, control, cluster = NULL, boot = FAL
   out
 }
 
+#' Newton decrement g' H^{-1} g (half the predicted decrease of a Newton step).
+#' @noRd
+newton_decrement <- function(ev) {
+  d <- tryCatch(sum(ev$grad * solve(ev$H + diag(1e-10 * max(1, mean(abs(diag(ev$H)))), length(ev$grad)),
+                                    ev$grad)), error = function(e) Inf)
+  if (!is.finite(d)) sum(ev$grad^2) else abs(d)
+}
+
 #' Check that the fitted quantile function is increasing in p on the grid.
 #' @noRd
 niqr_check_monotone <- function(theta, M) {
@@ -338,10 +359,11 @@ niqr_boot <- function(theta, y, X, w, fun, fun2, control, cluster) {
     s <- unlist(idx[sample.int(length(uid), length(uid), replace = TRUE)], use.names = FALSE)
     f <- tryCatch(suppressWarnings(niqr_fit(theta, y[s], X[s, , drop = FALSE], w[s], fun, fun2, ctrl,
                                             boot = TRUE)), error = function(e) NULL)
-    if (!is.null(f)) TH[r, ] <- f$coefficients
+    if (!is.null(f) && f$converged) TH[r, ] <- f$coefficients
   }
   ok <- stats::complete.cases(TH)
   if (sum(ok) < 10) stop("bootstrap failed: too few successful replications", call. = FALSE)
-  if (sum(!ok) > 0) warning(sprintf("%d bootstrap replications failed", sum(!ok)), call. = FALSE)
+  if (sum(!ok) > 0) warning(sprintf("%d bootstrap replications failed or did not converge (excluded)", sum(!ok)),
+                            call. = FALSE)
   stats::cov(TH[ok, , drop = FALSE])
 }

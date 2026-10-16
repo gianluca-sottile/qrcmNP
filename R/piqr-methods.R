@@ -240,15 +240,12 @@ predict.piqr <- function(object, pos.lambda, type = c("beta", "CDF", "QF", "sim"
   if (!missing(newdata)) {
     newdata <- as.data.frame(newdata)
     if (type == "CDF") {
-      yn <- as.character(if (fittype == "ctiqr") mt[[2]][[3]]
-                         else if (fittype == "ciqr") mt[[2]][[2]] else mt[[2]])
+      yv <- all.vars(mt[[2]])
+      yn <- if (fittype == "ctiqr") yv[2] else yv[1]
       if (is.na(match(yn, colnames(newdata))))
         stop("for 'type = \"CDF\"', 'newdata' must contain the response variable", call. = FALSE)
-      if (fittype == "ciqr") newdata[, as.character(mt[[2]][[3]])] <- 1
-      if (fittype == "ctiqr") {
-        newdata[, as.character(mt[[2]][[4]])] <- 1
-        newdata[, as.character(mt[[2]][[2]])] <- -Inf
-      }
+      if (fittype == "ciqr") newdata[, yv[2]] <- 1
+      if (fittype == "ctiqr") { newdata[, yv[3]] <- 1; newdata[, yv[1]] <- -Inf }
     } else mt <- delete.response(mt)
     if (any(is.na(match(all.vars(mt), colnames(newdata)))))
       stop("'newdata' must contain all the covariates", call. = FALSE)
@@ -587,22 +584,24 @@ refit_piqr <- function(object, pos.lambda, criterion = c("BIC", "AIC"),
 #' K-fold cross-validation of the integrated loss along the path of a
 #' [piqr()] fit (uncensored data only).
 #'
-#' @param formula,formula.p,s,penalty,penalty.factor,nlambda,lambda.min.ratio,lambda
+#' @param formula,formula.p,weights,data,s,penalty,penalty.factor,nlambda,lambda.min.ratio,lambda
 #'   as in [piqr()].
-#' @param data a data frame containing the variables in `formula`.
-#' @param weights an optional numeric vector of weights (one per row of `data`).
 #' @param nfolds number of folds (default 10).
 #' @param foldid an optional vector of fold indicators (integers in
-#'   `1:nfolds`), one for each row of `data`.
+#'   `1:nfolds`), one for each observation used in the fit (i.e., each row of
+#'   `data` without missing values in the model variables).
 #' @param ... further arguments passed to [piqr()] (e.g., `tol`, `maxit`).
 #' @return An object of class `"cv.piqr"`, a list with items `lambda`, `cvm`
 #'   (mean cross-validated loss), `cvsd` (its standard error), `lambda.min`,
-#'   `lambda.1se`, `pos.min`, `pos.1se` (positions in `lambda`) and `fit`
-#'   (the [piqr()] fit on the full data).
+#'   `lambda.1se`, `pos.min`, `pos.1se` (positions in `lambda`), `foldid` and
+#'   `fit` (the [piqr()] fit on the full data).
 #' @details The cross-validated loss of observation \eqn{i} is
 #'   \eqn{\int_0^1 \rho_p\{y_i - x_i^\top\hat\theta_{-i}\, b(p)\}\,dp},
 #'   computed numerically, where \eqn{\hat\theta_{-i}} is estimated without
-#'   the fold containing \eqn{i}. `lambda.1se` is the largest \eqn{\lambda}
+#'   the fold containing \eqn{i}. In each fold the variables are standardized
+#'   as in the full data and \eqn{\lambda} is rescaled by the size of the
+#'   training sample, so that the same value of \eqn{\lambda} corresponds to
+#'   the same penalty in all fits. `lambda.1se` is the largest \eqn{\lambda}
 #'   whose error is within one standard error of the minimum.
 #' @seealso [piqr()], [gof.piqr()]
 #' @examples
@@ -613,55 +612,57 @@ refit_piqr <- function(object, pos.lambda, criterion = c("BIC", "AIC"),
 #' dat$y <- 1 + qnorm(runif(n)) + 2 * dat$x1
 #' cv <- cv_piqr(y ~ x1 + x2 + x3, formula.p = ~ slp(p, 2), data = dat,
 #'               nfolds = 5, nlambda = 20)
+#' cv
 #' plot(cv)
 #' coef(cv$fit, pos.lambda = cv$pos.1se)
 #' }
 #' @export
-cv_piqr <- function(formula, formula.p = ~ slp(p, 3), data, weights = NULL, s,
+cv_piqr <- function(formula, formula.p = ~ slp(p, 3), weights, data, s,
                     penalty = c("lasso", "group"), penalty.factor, nlambda = 100,
                     lambda.min.ratio, lambda, nfolds = 10, foldid, ...) {
   penalty <- match.arg(penalty)
-  if (missing(data) || !is.data.frame(data)) stop("'data' must be a data frame", call. = FALSE)
-  n <- nrow(data)
-  w <- if (is.null(weights)) rep.int(1, n) else weights
-  if (length(w) != n) stop("'weights' must have one value for each row of 'data'", call. = FALSE)
-  data$.cvw. <- w
-  args <- list(formula = formula, formula.p = formula.p, data = data, weights = quote(.cvw.),
-               penalty = penalty, nlambda = nlambda, ...)
-  if (!missing(s)) args$s <- s
-  if (!missing(penalty.factor)) args$penalty.factor <- penalty.factor
-  if (!missing(lambda.min.ratio)) args$lambda.min.ratio <- lambda.min.ratio
-  if (!missing(lambda)) args$lambda <- lambda
-  full <- do.call(piqr, args)
+  cl <- match.call()
+  cl$nfolds <- cl$foldid <- NULL
+  cl$penalty <- penalty
+  cl[[1L]] <- quote(qrcmNP::piqr)
+  full <- eval(cl, parent.frame())
   if (full$internal$type != "iqr") stop("cross-validation is only available for uncensored data", call. = FALSE)
+  mf <- full$internal$mf
+  n <- nrow(mf)
   lam <- full$lambda
   if (missing(foldid)) foldid <- sample(rep_len(seq_len(nfolds), n))
-  if (length(foldid) != n) stop("'foldid' must have one value for each row of 'data'", call. = FALSE)
+  if (length(foldid) != n)
+    stop(sprintf("'foldid' must have one value for each of the %d observations used in the fit", n), call. = FALSE)
   nfolds <- max(foldid)
+  w <- model.weights(mf); if (is.null(w)) w <- rep.int(1, n)
 
+  S <- attr(mf, "stats")
+  stats.full <- list(X = S$X, y = S$y, B = S$B)
+  mt <- attr(mf, "terms")
+  Xall <- model.matrix(mt, mf, contrasts.arg = attr(mf, "contrasts"))
+  yall <- model.response(mf)
   pg <- (1:1023) / 1024
-  bfun <- attr(full$internal$mf, "bfun")
-  Bp <- apply_bfun(bfun, pg, "bfun")
+  Bp <- apply_bfun(attr(mf, "bfun"), pg, "bfun")
   loss_new <- function(theta, X, y) {
-    Q <- X %*% theta %*% t(Bp)
-    R <- y - Q
-    P <- matrix(pg, nrow(R), ncol(R), byrow = TRUE)
-    rowSums(R * (P - (R < 0))) / 1024
+    R <- y - X %*% theta %*% t(Bp)
+    rowSums(R * (matrix(pg, nrow(R), ncol(R), byrow = TRUE) - (R < 0))) / 1024
   }
-  tt <- delete.response(terms(full))
-  xlev <- .getXlevels(terms(full), full$internal$mf)
+  dots <- list(...)
+  tol <- if (is.null(dots$tol)) 1e-6 else dots$tol
+  maxit <- if (is.null(dots$maxit)) 100 else dots$maxit
   err <- matrix(NA_real_, n, length(lam))
   for (f in seq_len(nfolds)) {
     test <- which(foldid == f)
-    a2 <- args; a2$data <- data[-test, , drop = FALSE]; a2$lambda <- lam
-    a2$nlambda <- NULL; a2$lambda.min.ratio <- NULL
-    fit <- suppressWarnings(do.call(piqr, a2))
-    mft <- model.frame(terms(full), data[test, , drop = FALSE], xlev = xlev)
-    Xt <- model.matrix(terms(full), mft)
-    yt <- model.response(mft)
-    for (j in seq_along(fit$lambda)) err[test, j] <- loss_new(fit$coefficients[[j]], Xt, yt)
+    mtr <- mf[-test, , drop = FALSE]
+    attr(mtr, "terms") <- mt
+    A <- check_in(mtr, full$internal$formula.p, full$internal$s, stats = stats.full)
+    ntr <- length(A$V$y)
+    fit <- suppressWarnings(piqr_path(A, penalty = penalty, pf = full$internal$pf, nlambda = length(lam),
+                                      lambda.min.ratio = NULL, lambda = lam * ntr / n,
+                                      tol = tol, maxit = maxit, verbose = FALSE))
+    for (j in seq_along(lam)) err[test, j] <- loss_new(fit$theta[[j]], Xall[test, , drop = FALSE], yall[test])
   }
-  cvm <- colSums(err * w, na.rm = TRUE) / sum(w)
+  cvm <- colSums(err * w) / sum(w)
   cvsd <- vapply(seq_along(lam), function(j) {
     fm <- tapply(err[, j] * w, foldid, sum) / tapply(w, foldid, sum)
     stats::sd(fm) / sqrt(nfolds)

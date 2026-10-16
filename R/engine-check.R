@@ -7,10 +7,12 @@
 #    Sottile et al. (2020), Section 3;
 #  * interval-censored data are not supported.
 
-#' Prepare data, basis and scaling for estimation.
+#' Prepare data, basis and scaling for estimation. If 'stats' is supplied
+#' (list(X, y, B) as returned in stats.X, stats.y, stats.B), its location-scale
+#' values are used instead of those computed from the data.
 #' @return list(mf, U, V, stats.B, stats.X, stats.y, internal.bfun, bfun, s, type)
 #' @noRd
-check_in <- function(mf, formula.p, s) {
+check_in <- function(mf, formula.p, s, stats = NULL) {
 
   if (!any(all.vars(formula.p) == "p"))
     stop("the quantile function must depend on 'p'", call. = FALSE)
@@ -146,6 +148,12 @@ check_in <- function(mf, formula.p, s) {
   if (!intX || all(s[constX, ] == 0)) mX <- rep.int(0, q)
   else for (j in varsX) if (any(s[j, ] > s[constX, ])) mX[j] <- 0
   if (!intB || any(s[, constB] == 0)) mB <- rep.int(0, k)
+  if (!is.null(stats)) {
+    # reuse the scaling of another fit (e.g., the full data in cross-validation),
+    # so that the same lambda corresponds to the same penalty
+    mX <- stats$X$m; sX <- stats$X$s; my <- stats$y$m; My <- stats$y$M
+    if (!use.slp) { mB <- stats$B$m; sB <- stats$B$s }
+  }
 
   # external bfun (post-estimation)
   if (!use.slp) {
