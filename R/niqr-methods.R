@@ -146,7 +146,7 @@ print.summary.niqr <- function(x, digits = max(3L, getOption("digits") - 3L), ..
 #' @param ... not used.
 #' @return
 #' * `type = "beta"`: a list with one data frame for each column of `fun`, with
-#'   columns `p`, `beta`, and (if `se = TRUE`) `se`, `low`, `up` (95\% pointwise
+#'   columns `p`, `beta`, and (if `se = TRUE`) `se`, `low`, `up` (95% pointwise
 #'   confidence limits).
 #' * `type = "CDF"` or `"PDF"`: a vector.
 #' * `type = "QF"`: a data frame with one column for each `p` or, if `se = TRUE`,
@@ -223,7 +223,7 @@ predict.niqr <- function(object, type = c("beta", "CDF", "PDF", "QF", "sim"), ne
 #' with pointwise confidence bands, and a uniform QQ-plot of the fitted CDF.
 #'
 #' @param x an object of class `"niqr"`.
-#' @param conf.int logical: draw 95\% confidence bands?
+#' @param conf.int logical: draw 95% confidence bands?
 #' @param which an optional vector of indices of the coefficient functions to
 #'   plot (use `length(beta) + 1` for the QQ-plot). If missing and
 #'   `ask = TRUE`, a menu is shown.

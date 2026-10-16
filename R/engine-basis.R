@@ -8,7 +8,8 @@
 pmax0 <- function(x) (x + abs(x)) / 2
 
 #' Row-wise Kronecker (Khatri-Rao) product used to vectorise theta-related
-#' quantities. Column (h - 1) * q + j of the result is X[, j] * B[, h], which
+#' quantities. Column (h - 1) * q + j of the result is the product of column j
+#' of X and column h of B, which
 #' matches the column-major vectorisation of the q x k matrix theta.
 #' @noRd
 kr <- function(X, B) {

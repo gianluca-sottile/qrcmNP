@@ -129,7 +129,7 @@ pstar <- function(theta, V, bfun, type) {
 }
 
 #' Integrated loss, uncensored data (internal scale):
-#' sum_i w_i [ y_i (p*_i - 1/2) + x_i' theta (BB1 - B(p*_i)) ].
+#' sum_i w_i { y_i (p*_i - 1/2) + x_i' theta (BB1 - B(p*_i)) }.
 #' @noRd
 iobjfun <- function(theta, y, X, weights, bfun, p.star) {
   B <- bfun$Bp[p.star, , drop = FALSE]
