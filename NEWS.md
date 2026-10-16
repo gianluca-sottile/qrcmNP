@@ -1,0 +1,72 @@
+# qrcmNP (development version, to be released as 0.3.0)
+
+## Penalized models (`piqr()`)
+
+* New solver (`method = "pnewton"`, default): proximal Newton algorithm with exact
+  gradient and Hessian of the integrated loss, coordinate descent for the penalized
+  quadratic subproblem, warm starts, sequential strong rules and KKT checks. It
+  solves exactly the penalized problem of Sottile et al. (2020, eq. 3.4).
+* New argument `penalty = c("lasso", "group")`: the group lasso selects covariates
+  as a whole (all the coefficients of a covariate are zero or nonzero).
+* New argument `penalty.factor` (covariate-specific penalty weights; 0 = unpenalized).
+* The algorithm of version 0.2.x is still available with `method = "legacy"`.
+* New `refit_piqr()`: unpenalized re-estimation of the selected model with
+  `qrcm::iqr()` (post-selection inference, Sottile et al., 2020, Section 3.2).
+* New `cv_piqr()`: K-fold cross-validation of the integrated loss.
+* `gof.piqr()`: `Cn` can be a number; new argument `df` (`"parameters"`, the default
+  for the new solver, or `"covariates"`, the default for `method = "legacy"`); the
+  result has a `print()` method and contains the criterion along the path.
+* `obj.function` is now computed also for censored and truncated data, so that
+  `gof.piqr()` works with `Surv()` responses.
+* `coef()`, `summary()` and `predict()` gain the argument `lambda`; they no longer
+  fail when the path contains a single value of lambda.
+* `plot(xvar = "beta")`: the QQ-plot now uses `ppoints()` (it previously used sorted
+  uniform random numbers); `ask` defaults to `interactive()`.
+* `display` is deprecated in favour of `verbose` (default `FALSE`); messages are
+  issued with `message()`.
+* Covariance matrices are computed only by `method = "legacy"`; use `refit_piqr()`.
+
+## Nonlinear models (`niqr()`)
+
+* New formula interface: `niqr(formula, data, fun, fun2, x0, weights, cluster, control)`.
+  The matrix interface `niqr(fun, fun2, x0, X, y)` still works but is deprecated.
+* The gradient is now correct also when `fun2` is nonlinear in `beta` or in the
+  covariates (e.g., Hill dose-response models); it was correct only for models
+  linear in the covariates.
+* Integrals over p are computed on a grid that is denser in the tails, splitting the
+  cell that contains F(y | x), which makes loss and gradient smooth and consistent.
+  The loss no longer requires O(n^2) operations.
+* Optimization by Levenberg-Marquardt damped Newton with the analytic Gauss-Newton
+  Hessian, instead of BFGS.
+* Standard errors: sandwich formula with the analytic Hessian (previously the BFGS
+  approximation, or the identity matrix if the algorithm stopped within 10 iterations),
+  cluster-robust sandwich, bootstrap and cluster bootstrap (`niqr.control(se = "boot")`).
+* New `niqr.control()`; the control names of version 0.2.x are mapped or ignored
+  with a message.
+* New methods `coef()`, `vcov()`, `nobs()`, `terms()`, `model.matrix()`; `predict()`
+  gains `type = "PDF"` and accepts data frames as `newdata`; `summary()` reports the
+  information criteria of Bottai and Cilluffo (2020).
+* New `gof.niqr()` (AIC, BIC and their log versions, for one or more models).
+* `testfit.niqr()` is deprecated in favour of the `test.fit()` method; failed
+  bootstrap replications no longer stop the procedure.
+
+## Package infrastructure
+
+* The package no longer calls non-exported functions of 'qrcm' through
+  `getFromNamespace()`: the required internal routines (adapted from 'qrcm', with
+  attribution) are now part of 'qrcmNP'. Jacobians are computed with a single
+  cross-product of Khatri-Rao matrices.
+* 'qrcm' and 'survival' moved from `Depends` to `Imports`; `slp()`, `plf()` and
+  `test.fit()` are re-exported from 'qrcm'.
+* Documentation written with roxygen2; new vignette, tests (testthat) and NEWS.
+
+# qrcmNP 0.2.2
+
+* Included the Authors@R field in the DESCRIPTION.
+* Minor fixes to the linking targets problem.
+
+# qrcmNP 0.2.0
+
+* Renamed internal functions.
+* Improved starting points.
+* New dependency 'pch' (>= 2.0).

@@ -1,0 +1,78 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.path = "man/figures/README-")
+```
+
+# qrcmNP
+
+<!-- badges: start -->
+[![CRAN status](https://www.r-pkg.org/badges/version/qrcmNP)](https://CRAN.R-project.org/package=qrcmNP)
+[![R-CMD-check](https://github.com/gianluca-sottile/qrcmNP/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/gianluca-sottile/qrcmNP/actions/workflows/R-CMD-check.yaml)
+<!-- badges: end -->
+
+'qrcmNP' extends quantile regression coefficients modeling (QRCM, Frumento and
+Bottai, 2016; package 'qrcm') in two directions:
+
+* `piqr()`: **penalized** QRCM for covariate selection using the information on
+  all quantiles simultaneously (Sottile, Frumento, Chiodi and Bottai, 2020), with
+  lasso and group lasso penalties;
+* `niqr()`: **nonlinear** parametric quantile models, nonlinear in the parameters,
+  in the covariates, or both (Bottai and Cilluffo, 2020).
+
+## Installation
+
+```r
+# CRAN version
+install.packages("qrcmNP")
+# development version
+# install.packages("remotes")
+remotes::install_github("gianluca-sottile/qrcmNP")
+```
+
+## Penalized QRCM
+
+```{r piqr}
+library(qrcmNP)
+set.seed(1234)
+n <- 300
+d <- data.frame(x1 = rexp(n), x2 = runif(n, 0, 5), x3 = rnorm(n), x4 = runif(n))
+u <- runif(n)
+d$y <- 1 + qnorm(u) + (1 + 2 * u) * d$x1 + d$x2      # x3 and x4 are irrelevant
+
+fit <- piqr(y ~ x1 + x2 + x3 + x4, formula.p = ~ slp(p, 2), data = d, nlambda = 30)
+best <- gof.piqr(fit, method = "BIC", plot = FALSE)
+best
+
+# unpenalized re-estimation of the selected model, with standard errors
+m <- refit_piqr(fit, pos.lambda = best$posMinLambda)
+summary(m)
+```
+
+## Nonlinear parametric quantile models
+
+```{r niqr}
+set.seed(1234)
+x <- runif(n)
+fun <- function(theta, p) cbind(theta[1] + exp(theta[2] * p), theta[3] + theta[4] * p)
+b <- fun(c(1, 1, 1, 1), runif(n))
+dn <- data.frame(y = b[, 1] + b[, 2] * x, x = x)
+
+m2 <- niqr(y ~ x, data = dn, fun = fun, x0 = rep(0.5, 4))
+summary(m2)
+```
+
+## References
+
+* Frumento, P. and Bottai, M. (2016). Parametric modeling of quantile regression
+  coefficient functions. *Biometrics*, 72(1), 74-84. <https://doi.org/10.1111/biom.12410>
+* Sottile, G., Frumento, P., Chiodi, M. and Bottai, M. (2020). A penalized approach to
+  covariate selection through quantile regression coefficient models. *Statistical
+  Modelling*, 20(4), 369-385. <https://doi.org/10.1177/1471082X19825523>
+* Bottai, M. and Cilluffo, G. (2020). Nonlinear parametric quantile models.
+  *Statistical Methods in Medical Research*, 29(12), 3757-3769.
+  <https://doi.org/10.1177/0962280220941159>
