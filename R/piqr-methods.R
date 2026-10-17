@@ -437,7 +437,6 @@ plot_beta_piqr <- function(x, l, which = NULL, ask = interactive(), polygon = TR
 #'   `n`, the sample size, and `q`, the number of columns of the model matrix,
 #'   e.g. `"log(log(n))"`) multiplying the BIC penalty, see Details.
 #' @param plot logical: plot the criterion against \eqn{\log\lambda}?
-#' @param df.new deprecated, kept for compatibility (ignored).
 #' @param logi logical: if `TRUE` (default) the criteria are computed on the
 #'   logarithm of the loss (Sottile et al., 2020), otherwise on the loss.
 #' @param df how to count the degrees of freedom: `"parameters"`, the number of
@@ -481,9 +480,11 @@ plot_beta_piqr <- function(x, l, which = NULL, ask = interactive(), polygon = TR
 #' gof.piqr(fit, method = "AIC")
 #' gof.piqr(fit, method = "BIC", df = "parameters", plot = FALSE)$posMinLambda
 #' @export
-gof.piqr <- function(object, method = c("BIC", "AIC"), Cn = 1, plot = TRUE, df.new = TRUE,
+gof.piqr <- function(object, method = c("BIC", "AIC"), Cn = 1, plot = TRUE,
                      logi = TRUE, df = NULL, ...) {
   cl <- match.call()
+  if ("df.new" %in% names(list(...)))
+    stop("the argument 'df.new' was removed in qrcmNP 1.0.0: please use 'df'", call. = FALSE)
   method <- match.arg(method)
   if (is.null(df)) df <- if (identical(object$method, "legacy")) "covariates" else "parameters"
   df.type <- match.arg(df, c("covariates", "parameters"))

@@ -99,8 +99,11 @@ test_that("refit_piqr re-estimates the selected model with qrcm::iqr", {
   expect_true(all(sqrt(diag(m$covar)) >= 0))
 })
 
-test_that("display is deprecated", {
-  expect_warning(piqr(fo, formula.p = fp, data = d, nlambda = 2, display = FALSE), "deprecated")
+test_that("removed arguments give informative errors", {
+  expect_error(piqr(fo, formula.p = fp, data = d, nlambda = 2, display = FALSE), "removed in qrcmNP 1.0.0")
+  expect_error(piqr(fo, formula.p = fp, data = d, nlambda = 2, foo = 1), "unused argument")
+  fit <- piqr(fo, formula.p = fp, data = d, nlambda = 3)
+  expect_error(gof.piqr(fit, df.new = TRUE, plot = FALSE), "removed in qrcmNP 1.0.0")
 })
 
 test_that("censored data are supported", {

@@ -1,4 +1,30 @@
-# qrcmNP (development version, to be released as 0.3.0)
+# qrcmNP 1.0.0
+
+## Breaking changes
+
+* `piqr()` now solves by default the lasso problem of Sottile et al. (2020, eq. 3.4)
+  (`method = "pnewton"`): results differ from version 0.2.x. The previous algorithm
+  is available with `method = "legacy"`.
+* `library(qrcmNP)` no longer attaches 'qrcm' and 'survival' (moved to `Imports`);
+  `slp()`, `plf()` and `test.fit()` are re-exported. Use `library(qrcm)`,
+  `library(survival)` or `qrcm::iqr()`, `survival::Surv()` where needed.
+* `gof.piqr()`: the default `df` counts the nonzero coefficients (`"parameters"`);
+  use `df = "covariates"` for the previous definition (default with `method = "legacy"`).
+* Default output is silent (`verbose = FALSE`); `ask` defaults to `interactive()`.
+* `niqr()`: standard errors are now computed with the analytic Hessian, so they
+  differ from those of version 0.2.x.
+* Removed (with an informative error when used):
+
+  | Removed in 1.0.0 | Use instead |
+  |---|---|
+  | `testfit.niqr(obj, R)` | `test.fit(object, R)` |
+  | `niqr(fun, fun2, x0, X, y, control)` | `niqr(formula, data, fun, fun2, x0)` |
+  | `piqr(..., display = )` | `piqr(..., verbose = )` |
+  | `gof.piqr(..., df.new = )` | `gof.piqr(..., df = )` |
+  | `niqr()` control names `display`, `n_p`, `low_p`, `up_p`, `maxit_start`, `h1`, `meth`, ... | `niqr.control(verbose, n.p, eps, ...)`; `cluster` is an argument of `niqr()` |
+  | components `x`, `fx`, `gx`, `Hx`, `p.star.y`, `code`, `iter` of `niqr` objects | `coefficients`, `obj.function`, `gradient`, `hessian`, `CDF`, `converged`, `n.it` |
+  | matrix `newdata` (with a column `"y"`) in `predict.niqr()` | a data frame |
+
 
 ## Penalized models (`piqr()`)
 
@@ -22,14 +48,12 @@
   fail when the path contains a single value of lambda.
 * `plot(xvar = "beta")`: the QQ-plot now uses `ppoints()` (it previously used sorted
   uniform random numbers); `ask` defaults to `interactive()`.
-* `display` is deprecated in favour of `verbose` (default `FALSE`); messages are
-  issued with `message()`.
+* Messages are issued with `message()` (argument `verbose`).
 * Covariance matrices are computed only by `method = "legacy"`; use `refit_piqr()`.
 
 ## Nonlinear models (`niqr()`)
 
 * New formula interface: `niqr(formula, data, fun, fun2, x0, weights, cluster, control)`.
-  The matrix interface `niqr(fun, fun2, x0, X, y)` still works but is deprecated.
 * The gradient is now correct also when `fun2` is nonlinear in `beta` or in the
   covariates (e.g., Hill dose-response models); it was correct only for models
   linear in the covariates.
@@ -41,15 +65,14 @@
 * Standard errors: sandwich formula with the analytic Hessian (previously the BFGS
   approximation, or the identity matrix if the algorithm stopped within 10 iterations),
   cluster-robust sandwich, bootstrap and cluster bootstrap (`niqr.control(se = "boot")`).
-* New `niqr.control()`; the control names of version 0.2.x are mapped or ignored
-  with a message.
+* New `niqr.control()`.
 * New methods `coef()`, `vcov()`, `nobs()`, `terms()`, `model.matrix()`; `predict()`
   gains `type = "PDF"` and accepts data frames as `newdata`; `summary()` reports the
   information criteria of Bottai and Cilluffo (2020).
 * New `gof.niqr()` (AIC, BIC and their log versions, for one or more models).
 * `test.fit()`: the Kolmogorov-Smirnov statistic is now two-sided.
-* `testfit.niqr()` is deprecated in favour of the `test.fit()` method; failed
-  bootstrap replications no longer stop the procedure.
+* New `test.fit()` method for `niqr` objects; failed bootstrap replications no longer
+  stop the procedure.
 
 ## Package infrastructure
 

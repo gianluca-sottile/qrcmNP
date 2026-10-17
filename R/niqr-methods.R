@@ -11,15 +11,8 @@ niqr_M <- function(object, X = object$X, y = object$y) {
 #' @noRd
 niqr_newdata <- function(object, newdata, response = FALSE) {
   if (missing(newdata) || is.null(newdata)) return(list(X = object$X, y = object$y))
-  if (is.null(object$terms)) {
-    # deprecated matrix interface: newdata is a matrix with the columns of X (without
-    # the intercept) and, if response = TRUE, a column "y"
-    newdata <- as.matrix(newdata)
-    nomi <- colnames(object$X)[-1]
-    X <- cbind(1, newdata[, nomi, drop = FALSE]); colnames(X) <- colnames(object$X)
-    y <- if (response) newdata[, "y"] else NULL
-    return(list(X = X, y = y))
-  }
+  if (!is.data.frame(newdata) && !is.list(newdata))
+    stop("'newdata' must be a data frame", call. = FALSE)
   mt <- object$terms
   if (!response) mt <- delete.response(mt)
   mf <- model.frame(mt, data = as.data.frame(newdata), xlev = object$xlevels, na.action = stats::na.exclude)
@@ -326,7 +319,6 @@ gof.niqr <- function(object, ...) {
 #' @param object an object of class `"niqr"`.
 #' @param R number of bootstrap replications (default 100).
 #' @param trace logical: print the progress?
-#' @param obj deprecated, use `object`.
 #' @param ... not used.
 #' @return A matrix with the test statistics and their bootstrap p-values.
 #' @seealso [niqr()], [gof.niqr()]
@@ -366,9 +358,25 @@ test.fit.niqr <- function(object, R = 100, trace = FALSE, ...) {
   out
 }
 
-#' @rdname test.fit.niqr
+#' Defunct Functions in qrcmNP
+#'
+#' These functions and interfaces were removed in 'qrcmNP' 1.0.0:
+#' * `testfit.niqr(obj, R)`: use [test.fit()] (`test.fit(object, R)`);
+#' * `niqr(fun, fun2, x0, X, y, control)`: use
+#'   `niqr(formula, data, fun, fun2, x0)` (see [niqr()]);
+#' * the argument `display` of [piqr()]: use `verbose`;
+#' * the argument `df.new` of [gof.piqr()]: use `df`;
+#' * the control names of 'qrcmNP' 0.2.x in [niqr()]: use [niqr.control()].
+#'
+#' @param ... ignored.
+#' @return No return value: an error is raised.
+#' @name qrcmNP-defunct
+#' @keywords internal
+NULL
+
+#' @rdname qrcmNP-defunct
 #' @export
-testfit.niqr <- function(obj, R = 100) {
-  warning("'testfit.niqr()' is deprecated; please use 'test.fit()'", call. = FALSE)
-  test.fit.niqr(obj, R = R)
+testfit.niqr <- function(...) {
+  .Defunct("test.fit", package = "qrcmNP",
+           msg = "'testfit.niqr()' was removed in qrcmNP 1.0.0: please use 'test.fit(object, R)'")
 }

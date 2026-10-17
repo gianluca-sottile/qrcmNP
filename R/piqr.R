@@ -29,7 +29,6 @@
 #' @param tol convergence tolerance (default `1e-6`).
 #' @param maxit maximum number of Newton iterations for each \eqn{\lambda}
 #'   (default 100).
-#' @param display deprecated, use `verbose`.
 #' @param penalty either `"lasso"` (default), the \eqn{\ell_1} penalty
 #'   \eqn{\lambda\sum_{j,h} w_j|\theta_{jh}|} of Sottile et al. (2020, eq. 3.4),
 #'   or `"group"`, the group lasso penalty
@@ -48,6 +47,7 @@
 #'   described in Details, or `"legacy"` for the algorithm of 'qrcmNP' 0.2.x,
 #'   kept for reproducibility of published results.
 #' @param verbose logical: if `TRUE`, the progress along the path is printed.
+#' @param ... not used (an error is given for the removed argument `display`).
 #'
 #' @details
 #' Under the quantile regression coefficients model (QRCM) of Frumento and
@@ -157,16 +157,16 @@
 #' @export
 piqr <- function(formula, formula.p = ~ slp(p, 3), weights, data, s, nlambda = 100,
                  lambda.min.ratio = ifelse(nobs < nvars, 0.01, 1e-04), lambda,
-                 tol = 1e-6, maxit = 100, display, penalty = c("lasso", "group"),
-                 penalty.factor, method = c("pnewton", "legacy"), verbose = FALSE) {
+                 tol = 1e-6, maxit = 100, penalty = c("lasso", "group"),
+                 penalty.factor, method = c("pnewton", "legacy"), verbose = FALSE, ...) {
 
   cl <- match.call()
   penalty <- match.arg(penalty)
   method <- match.arg(method)
-  if (!missing(display)) {
-    warning("argument 'display' is deprecated; please use 'verbose' instead", call. = FALSE)
-    verbose <- isTRUE(display)
-  }
+  dots <- names(list(...))
+  if ("display" %in% dots)
+    stop("the argument 'display' was removed in qrcmNP 1.0.0: please use 'verbose'", call. = FALSE)
+  if (length(dots)) stop("unused argument(s): ", paste(dots, collapse = ", "), call. = FALSE)
 
   mf <- match.call(expand.dots = FALSE)
   m <- match(c("formula", "weights", "data"), names(mf), 0L)

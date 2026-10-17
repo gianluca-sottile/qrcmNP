@@ -21,17 +21,15 @@
 #'   i.e. `rowSums(beta * X)`.
 #' @param x0 starting values for \eqn{\theta}. If named, the names are used to
 #'   label the estimates.
-#' @param X,y deprecated matrix interface of 'qrcmNP' 0.2.x: a model matrix
-#'   (with the intercept) and a response vector, used when `formula` is missing.
 #' @param weights optional non-negative weights: a vector, or a variable in
 #'   `data` given without quotes. They are normalized to have mean 1 and are
 #'   treated as sampling (inverse-probability) weights in the sandwich formula.
 #' @param cluster an optional vector, or a variable in `data` given without
 #'   quotes, identifying clusters of correlated observations. It is used to
 #'   compute cluster-robust standard errors (sandwich) or a cluster bootstrap.
-#' @param control a list of control parameters, see [niqr.control()]. For
-#'   compatibility, the names used in 'qrcmNP' 0.2.x (`tol`, `maxit`,
-#'   `display`, `cluster`, `n_p`, `low_p`, `up_p`) are also accepted.
+#' @param control a list of control parameters, see [niqr.control()].
+#' @param ... not used. Arguments of the interface of 'qrcmNP' 0.2.x (`X`, `y`)
+#'   give an informative error.
 #'
 #' @details
 #' Let \eqn{Q(p \mid x, \theta)}{Q(p | x, theta)} be a parametric model for the
@@ -79,8 +77,10 @@
 #' \item{converged, n.it}{convergence indicator and number of iterations.}
 #' \item{call, terms, X, y, weights, cluster, fun, fun2, control}{the elements
 #'   of the model.}
-#' The items `x`, `fx`, `gx`, `Hx`, `p.star.y`, `code` and `iter` are
-#' kept for compatibility with 'qrcmNP' 0.2.x.
+#'
+#' @note The matrix interface `niqr(fun, fun2, x0, X, y)` of 'qrcmNP' 0.2.x was
+#'   removed in version 1.0.0: use `niqr(y ~ x, data, fun, fun2, x0)`, where the
+#'   model matrix of the formula plays the role of the old `X`.
 #'
 #' @references
 #' Bottai, M. and Cilluffo, G. (2020). Nonlinear parametric quantile models.
@@ -126,53 +126,44 @@
 #' summary(mh)
 #' }
 #' @export
-niqr <- function(formula, data, fun, fun2 = NULL, x0, X, y, weights, cluster,
-                 control = niqr.control()) {
+niqr <- function(formula, data, fun, fun2 = NULL, x0, weights, cluster,
+                 control = niqr.control(), ...) {
   cl <- match.call()
-
-  # backward compatibility: niqr(fun, fun2, x0, X, y, control) with positional arguments
-  if (!missing(formula) && is.function(formula)) {
-    sc <- as.list(sys.call())[-1L]
-    nms <- names(sc); if (is.null(nms)) nms <- rep.int("", length(sc))
-    pos <- sc[nms == ""]
-    names(pos) <- c("fun", "fun2", "x0", "X", "y", "control")[seq_along(pos)]
-    args <- lapply(c(pos, sc[nms != ""]), eval, envir = parent.frame())
-    return(do.call(niqr, args))
-  }
-
-  control <- do.call(niqr.control, normalize_niqr_control(control))
+  dots <- names(list(...))
+  if (any(c("X", "y") %in% dots) || (!missing(formula) && is.function(formula)))
+    stop("the matrix interface niqr(fun, fun2, x0, X, y) was removed in qrcmNP 1.0.0: ",
+         "please use niqr(formula, data, fun, fun2, x0), e.g. niqr(y ~ x, data = d, fun = fun, x0 = x0)",
+         call. = FALSE)
+  if (length(dots)) stop("unused argument(s): ", paste(dots, collapse = ", "), call. = FALSE)
+  if (missing(formula) || !inherits(formula, "formula")) stop("'formula' is required", call. = FALSE)
+  if (!is.list(control)) stop("'control' must be a list, see niqr.control()", call. = FALSE)
+  old <- intersect(names(control), c("display", "n_p", "low_p", "up_p", "alpha", "beta", "maxit_start",
+                                     "epsilon", "a1", "h1", "meth", "fun_prime_theta", "fun_prime_beta",
+                                     "cluster"))
+  if (length(old))
+    stop("control parameters of qrcmNP 0.2.x are no longer supported (", paste(old, collapse = ", "),
+         "): see ?niqr.control (e.g. 'display' -> 'verbose', 'n_p' -> 'n.p', 'low_p' -> 'eps'; ",
+         "'cluster' is now an argument of niqr())", call. = FALSE)
+  control <- do.call(niqr.control, control)
   if (missing(fun) || !is.function(fun)) stop("'fun' must be a function of (theta, p)", call. = FALSE)
   if (!is.null(fun2) && !is.function(fun2)) stop("'fun2' must be NULL or a function of (beta, X)", call. = FALSE)
   if (missing(x0)) stop("starting values 'x0' are required", call. = FALSE)
 
-  if (missing(formula)) {
-    if (missing(X) || missing(y)) stop("please provide 'formula' (and 'data')", call. = FALSE)
-    warning("the matrix interface niqr(fun, fun2, x0, X, y) is deprecated; ",
-            "please use niqr(formula, data, fun, fun2, x0)", call. = FALSE)
-    X <- as.matrix(X); y <- c(y)
-    if (is.null(colnames(X))) colnames(X) <- c("(Intercept)", if (ncol(X) > 1) paste0("X", seq_len(ncol(X) - 1)))
-    w <- if (missing(weights)) rep.int(1, length(y)) else weights
-    clus <- if (missing(cluster)) control$cluster else cluster
-    mt <- NULL; xlev <- NULL; contr <- NULL
-  } else {
-    mf <- match.call(expand.dots = FALSE)
-    m <- match(c("formula", "data", "weights", "cluster"), names(mf), 0L)
-    mf <- mf[c(1L, m)]
-    mf$drop.unused.levels <- TRUE
-    mf[[1L]] <- quote(stats::model.frame)
-    mf <- eval(mf, parent.frame())
-    mt <- attr(mf, "terms")
-    y <- model.response(mf, "numeric")
-    if (is.null(y) || is.matrix(y)) stop("the response must be a numeric vector", call. = FALSE)
-    X <- model.matrix(mt, mf)
-    xlev <- .getXlevels(mt, mf)
-    contr <- attr(X, "contrasts")
-    w <- model.weights(mf); if (is.null(w)) w <- rep.int(1, length(y))
-    clus <- mf[["(cluster)"]]
-    if (is.null(clus)) clus <- control$cluster
-  }
+  mf <- match.call(expand.dots = FALSE)
+  m <- match(c("formula", "data", "weights", "cluster"), names(mf), 0L)
+  mf <- mf[c(1L, m)]
+  mf$drop.unused.levels <- TRUE
+  mf[[1L]] <- quote(stats::model.frame)
+  mf <- eval(mf, parent.frame())
+  mt <- attr(mf, "terms")
+  y <- model.response(mf, "numeric")
+  if (is.null(y) || is.matrix(y)) stop("the response must be a numeric vector", call. = FALSE)
+  X <- model.matrix(mt, mf)
+  xlev <- .getXlevels(mt, mf)
+  contr <- attr(X, "contrasts")
+  w <- model.weights(mf); if (is.null(w)) w <- rep.int(1, length(y))
+  clus <- mf[["(cluster)"]]
   if (length(w) != length(y) || any(w < 0) || anyNA(w)) stop("invalid 'weights'", call. = FALSE)
-  if (!is.null(clus) && length(clus) != length(y)) stop("'cluster' must have one value for each observation", call. = FALSE)
 
   fit <- niqr_fit(x0, y, X, w, fun, fun2, control, clus)
   fit$call <- cl
@@ -198,34 +189,18 @@ niqr <- function(formula, data, fun, fun2 = NULL, x0, X, y, weights, cluster,
 #'   supplied), or `"none"`.
 #' @param R number of bootstrap replications (default 200).
 #' @param verbose logical: print the progress of the algorithm?
-#' @param cluster deprecated: use the `cluster` argument of [niqr()].
 #' @return A list of control parameters.
 #' @seealso [niqr()]
 #' @export
 niqr.control <- function(tol = 1e-6, maxit = 100, n.p = 199, eps = 1e-4,
                          h = .Machine$double.eps^(1 / 3), se = c("sandwich", "boot", "none"),
-                         R = 200, verbose = FALSE, cluster = NULL) {
+                         R = 200, verbose = FALSE) {
   se <- match.arg(se)
   if (!is.numeric(tol) || tol <= 0) stop("'tol' must be positive", call. = FALSE)
   if (!is.numeric(n.p) || n.p < 10) stop("'n.p' must be at least 10", call. = FALSE)
   if (!is.numeric(eps) || eps <= 0 || eps >= 0.1) stop("'eps' must be in (0, 0.1)", call. = FALSE)
   list(tol = tol, maxit = as.integer(maxit), n.p = as.integer(n.p), eps = eps, h = h,
-       se = se, R = as.integer(R), verbose = isTRUE(verbose), cluster = cluster)
-}
-
-#' Map the control names of qrcmNP 0.2.x to the current ones.
-#' @noRd
-normalize_niqr_control <- function(control) {
-  if (is.null(control)) return(list())
-  control <- as.list(control)
-  old <- c(display = "verbose", n_p = "n.p")
-  for (o in names(old)) if (!is.null(control[[o]])) { control[[old[o]]] <- control[[o]]; control[[o]] <- NULL }
-  if (!is.null(control$low_p)) { control$eps <- control$low_p; control$low_p <- NULL; control$up_p <- NULL }
-  ignored <- intersect(names(control), c("alpha", "beta", "maxit_start", "epsilon", "a1", "h1", "meth",
-                                         "fun_prime_theta", "fun_prime_beta", "up_p"))
-  if (length(ignored))
-    message("control parameters no longer used: ", paste(ignored, collapse = ", "))
-  control[setdiff(names(control), ignored)]
+       se = se, R = as.integer(R), verbose = isTRUE(verbose))
 }
 
 #' Fit a niqr model (internal).
@@ -324,9 +299,7 @@ niqr_fit <- function(x0, y, X, w, fun, fun2, control, cluster = NULL, boot = FAL
   out <- list(coefficients = theta, se = se, covar = covar, obj.function = ev$loss,
               gradient = ev$grad, hessian = ev$H, omega = omega, CDF = cdf, PDF = pdf,
               converged = conv, n.it = it, X = X, y = y, weights = w, cluster = cluster,
-              fun = fun, fun2 = fun2, control = control,
-              x = theta, fx = ev$loss, gx = ev$grad, Hx = ev$H, p.star.y = cdf,
-              code = if (conv) 0L else 1L, iter = it)
+              fun = fun, fun2 = fun2, control = control)
   class(out) <- "niqr"
   out
 }

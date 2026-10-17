@@ -41,15 +41,17 @@ test_that("the analytic gradient matches numerical derivatives (nonlinear fun2)"
   expect_equal(unname(coef(m))[3], 10, tolerance = 0.01)
 })
 
-test_that("the deprecated interfaces still work", {
+test_that("the interfaces removed in 1.0.0 give informative errors", {
   ref <- readRDS(test_path("fixtures", "ref_0.2.2.rds"))$niqr1
   X <- cbind(1, ref$data$x); y <- ref$data$y
-  expect_warning(m1 <- niqr(fun = fun, x0 = rep(0.5, 4), X = X, y = y), "deprecated")
-  expect_warning(m2 <- niqr(fun, NULL, rep(0.5, 4), X, y), "deprecated")
-  expect_equal(coef(m1), coef(m2))
-  expect_equal(m1$x, coef(m1))
-  expect_message(niqr(y ~ x, data = ref$data, fun = fun, x0 = rep(0.5, 4),
-                      control = list(maxit_start = 5, display = FALSE)), "no longer used")
+  expect_error(niqr(fun = fun, x0 = rep(0.5, 4), X = X, y = y), "removed in qrcmNP 1.0.0")
+  expect_error(niqr(fun, NULL, rep(0.5, 4), X, y), "removed in qrcmNP 1.0.0")
+  expect_error(niqr(y ~ x, data = ref$data, fun = fun, x0 = rep(0.5, 4),
+                    control = list(maxit_start = 5, display = FALSE)), "no longer supported")
+  m <- niqr(y ~ x, data = ref$data, fun = fun, x0 = rep(0.5, 4))
+  expect_null(m[["x"]]); expect_null(m[["fx"]])
+  expect_error(testfit.niqr(m, R = 2), "removed in qrcmNP 1.0.0")
+  expect_error(predict(m, type = "QF", p = 0.5, newdata = cbind(x = 0.5)), "data frame")
 })
 
 test_that("cluster-robust and bootstrap standard errors", {
@@ -84,7 +86,6 @@ test_that("niqr methods", {
   expect_equal(g$AIC, m$obj.function * nrow(ref$data) + 8)
   tf <- test.fit(m, R = 5)
   expect_equal(dim(tf), c(2, 2))
-  expect_warning(testfit.niqr(m, R = 2), "deprecated")
   grDevices::pdf(NULL)
   on.exit(grDevices::dev.off())
   expect_silent(plot(m, which = 1:3, ask = FALSE))
