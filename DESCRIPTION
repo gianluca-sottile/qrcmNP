@@ -4,7 +4,7 @@ Title: Nonlinear and Penalized Quantile Regression Coefficients Modeling
 Version: 1.0.0
 Authors@R: c(
     person("Gianluca", "Sottile", email = "gianluca.sottile@unipa.it",
-           role = c("aut", "cre")),
+           role = c("aut", "cre"), comment = c(ORCID = "0000-0001-9347-7251")),
     person("Paolo", "Frumento", role = c("aut", "cph"),
            comment = "author of parts of the code adapted from 'qrcm'"))
 Description: Penalized and nonlinear parametric modeling of quantile
