@@ -15,11 +15,11 @@ piqr(
   lambda,
   tol = 1e-06,
   maxit = 100,
-  display,
   penalty = c("lasso", "group"),
   penalty.factor,
   method = c("pnewton", "legacy"),
-  verbose = FALSE
+  verbose = FALSE,
+  ...
 )
 }
 \arguments{
@@ -56,8 +56,6 @@ and \code{lambda.min.ratio}.}
 \item{maxit}{maximum number of Newton iterations for each \eqn{\lambda}
 (default 100).}
 
-\item{display}{deprecated, use \code{verbose}.}
-
 \item{penalty}{either \code{"lasso"} (default), the \eqn{\ell_1} penalty
 \eqn{\lambda\sum_{j,h} w_j|\theta_{jh}|} of Sottile et al. (2020, eq. 3.4),
 or \code{"group"}, the group lasso penalty
@@ -79,6 +77,8 @@ described in Details, or \code{"legacy"} for the algorithm of 'qrcmNP' 0.2.x,
 kept for reproducibility of published results.}
 
 \item{verbose}{logical: if \code{TRUE}, the progress along the path is printed.}
+
+\item{...}{not used (an error is given for the removed argument \code{display}).}
 }
 \value{
 An object of class \code{"piqr"}, a list with items:

@@ -2,12 +2,9 @@
 % Please edit documentation in R/niqr-methods.R
 \name{test.fit.niqr}
 \alias{test.fit.niqr}
-\alias{testfit.niqr}
 \title{Goodness-of-Fit Test for Nonlinear Parametric Quantile Models}
 \usage{
 \method{test.fit}{niqr}(object, R = 100, trace = FALSE, ...)
-
-testfit.niqr(obj, R = 100)
 }
 \arguments{
 \item{object}{an object of class \code{"niqr"}.}
@@ -17,8 +14,6 @@ testfit.niqr(obj, R = 100)
 \item{trace}{logical: print the progress?}
 
 \item{...}{not used.}
-
-\item{obj}{deprecated, use \code{object}.}
 }
 \value{
 A matrix with the test statistics and their bootstrap p-values.

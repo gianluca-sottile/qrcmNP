@@ -12,8 +12,7 @@ niqr.control(
   h = .Machine$double.eps^(1/3),
   se = c("sandwich", "boot", "none"),
   R = 200,
-  verbose = FALSE,
-  cluster = NULL
+  verbose = FALSE
 )
 }
 \arguments{
@@ -38,8 +37,6 @@ supplied), or \code{"none"}.}
 \item{R}{number of bootstrap replications (default 200).}
 
 \item{verbose}{logical: print the progress of the algorithm?}
-
-\item{cluster}{deprecated: use the \code{cluster} argument of \code{\link[=niqr]{niqr()}}.}
 }
 \value{
 A list of control parameters.

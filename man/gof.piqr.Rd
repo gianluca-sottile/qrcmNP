@@ -9,7 +9,6 @@ gof.piqr(
   method = c("BIC", "AIC"),
   Cn = 1,
   plot = TRUE,
-  df.new = TRUE,
   logi = TRUE,
   df = NULL,
   ...
@@ -25,8 +24,6 @@ gof.piqr(
 e.g. \code{"log(log(n))"}) multiplying the BIC penalty, see Details.}
 
 \item{plot}{logical: plot the criterion against \eqn{\log\lambda}?}
-
-\item{df.new}{deprecated, kept for compatibility (ignored).}
 
 \item{logi}{logical: if \code{TRUE} (default) the criteria are computed on the
 logarithm of the loss (Sottile et al., 2020), otherwise on the loss.}

@@ -10,11 +10,10 @@ niqr(
   fun,
   fun2 = NULL,
   x0,
-  X,
-  y,
   weights,
   cluster,
-  control = niqr.control()
+  control = niqr.control(),
+  ...
 )
 }
 \arguments{
@@ -39,9 +38,6 @@ i.e. \code{rowSums(beta * X)}.}
 \item{x0}{starting values for \eqn{\theta}. If named, the names are used to
 label the estimates.}
 
-\item{X, y}{deprecated matrix interface of 'qrcmNP' 0.2.x: a model matrix
-(with the intercept) and a response vector, used when \code{formula} is missing.}
-
 \item{weights}{optional non-negative weights: a vector, or a variable in
 \code{data} given without quotes. They are normalized to have mean 1 and are
 treated as sampling (inverse-probability) weights in the sandwich formula.}
@@ -50,9 +46,10 @@ treated as sampling (inverse-probability) weights in the sandwich formula.}
 quotes, identifying clusters of correlated observations. It is used to
 compute cluster-robust standard errors (sandwich) or a cluster bootstrap.}
 
-\item{control}{a list of control parameters, see \code{\link[=niqr.control]{niqr.control()}}. For
-compatibility, the names used in 'qrcmNP' 0.2.x (\code{tol}, \code{maxit},
-\code{display}, \code{cluster}, \code{n_p}, \code{low_p}, \code{up_p}) are also accepted.}
+\item{control}{a list of control parameters, see \code{\link[=niqr.control]{niqr.control()}}.}
+
+\item{...}{not used. Arguments of the interface of 'qrcmNP' 0.2.x (\code{X}, \code{y})
+give an informative error.}
 }
 \value{
 An object of class \code{"niqr"}, a list with items:
@@ -66,8 +63,6 @@ gradient at \eqn{\hat\theta}.}
 \item{converged, n.it}{convergence indicator and number of iterations.}
 \item{call, terms, X, y, weights, cluster, fun, fun2, control}{the elements
 of the model.}
-The items \code{x}, \code{fx}, \code{gx}, \code{Hx}, \code{p.star.y}, \code{code} and \code{iter} are
-kept for compatibility with 'qrcmNP' 0.2.x.
 }
 \description{
 Estimates a parametric model for the whole conditional quantile function,
@@ -109,6 +104,11 @@ observations. A warning is given if quantile crossing is detected.
 Good starting values \code{x0} are important: the loss function may have several
 local minima when \eqn{Q} is not one-to-one in \eqn{\theta}
 (Bottai and Cilluffo, 2020, Theorem 1).
+}
+\note{
+The matrix interface \code{niqr(fun, fun2, x0, X, y)} of 'qrcmNP' 0.2.x was
+removed in version 1.0.0: use \code{niqr(y ~ x, data, fun, fun2, x0)}, where the
+model matrix of the formula plays the role of the old \code{X}.
 }
 \examples{
 ## Model linear in the covariates, nonlinear in the parameters:
