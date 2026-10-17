@@ -48,7 +48,7 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Gianluca Sottile \email{gianluca.sottile@unipa.it}
+\strong{Maintainer}: Gianluca Sottile \email{gianluca.sottile@unipa.it} (\href{https://orcid.org/0000-0001-9347-7251}{ORCID})
 
 Authors:
 \itemize{
